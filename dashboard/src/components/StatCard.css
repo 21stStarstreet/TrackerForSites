@@ -1,0 +1,93 @@
+.stat-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.375rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  transition: all var(--transition);
+  animation: fadeIn 0.3s ease both;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: transparent;
+  transition: background var(--transition);
+}
+
+.stat-card--accent::before  { background: linear-gradient(90deg, var(--accent), #a855f7); }
+.stat-card--success::before { background: linear-gradient(90deg, var(--success), #34d399); }
+.stat-card--warning::before { background: linear-gradient(90deg, var(--warning), #fbbf24); }
+.stat-card--purple::before  { background: linear-gradient(90deg, #a855f7, #ec4899); }
+
+.stat-card:hover {
+  border-color: var(--border-accent);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.stat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.stat-icon {
+  width: 30px; height: 30px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stat-icon--accent  { background: rgba(99,102,241,0.15);  color: var(--accent); }
+.stat-icon--success { background: rgba(16,185,129,0.15);  color: var(--success); }
+.stat-icon--warning { background: rgba(245,158,11,0.15);  color: var(--warning); }
+.stat-icon--purple  { background: rgba(168,85,247,0.15);  color: #a855f7; }
+
+.stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.stat-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.125rem;
+}
+
+.stat-sub {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.stat-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.15rem 0.4rem;
+  border-radius: 99px;
+}
+.trend--up   { color: var(--success); background: rgba(16,185,129,0.12); }
+.trend--down { color: var(--danger);  background: rgba(239,68,68,0.12); }
+.trend--flat { color: var(--text-muted); background: var(--bg-elevated); }

@@ -1,0 +1,30 @@
+# ── Ortam dosyaları ───────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── .NET ──────────────────────────────────────────────────────────────
+api/bin/
+api/obj/
+api/*.user
+api/.vs/
+
+# ── Node / React ──────────────────────────────────────────────────────
+node_modules/
+dashboard/node_modules/
+dashboard/dist/
+dashboard/.env
+dashboard/.env.local
+
+# ── Geliştirme araçları / geçici dosyalar ─────────────────────────────
+steps.txt
+temp_hash/
+db/fix_hash.sql
+
+# ── Loglar ────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── OS ────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
