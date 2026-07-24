@@ -5,7 +5,7 @@ Gizlilik odaklı, cookie'siz, kendi sunucunda barındırılan web analitik platf
 
 ---
 
-## Nasıl Çalışır?
+## 💡 Nasıl Çalışır?
 
 Docker yüklü herhangi bir sunucuya kopyala, `.env` ayarlarını yap ve başlat, hepsi bu.  
 Veritabanı, API ve arayüz tek bir komutla birlikte ayağa kalkar.
@@ -14,7 +14,7 @@ Veritabanı, API ve arayüz tek bir komutla birlikte ayağa kalkar.
 
 ---
 
-## İçindekiler
+## 📋 İçindekiler
 
 - [Özellikler](#özellikler)
 - [Mimari](#mimari)
@@ -26,7 +26,9 @@ Veritabanı, API ve arayüz tek bir komutla birlikte ayağa kalkar.
 
 ---
 
-## Özellikler
+## ✨ Özellikler
+
+<img width="1919" height="991" alt="image" src="https://github.com/user-attachments/assets/2c1e923f-8c0d-408f-ac21-da352ebd1c07" />
 
 | Özellik | Açıklama |
 |---|---|
@@ -43,7 +45,7 @@ Veritabanı, API ve arayüz tek bir komutla birlikte ayağa kalkar.
 
 ---
 
-## Mimari
+## 🏗️ Mimari
 
 ```
 Ziyaretçi Tarayıcısı
@@ -74,7 +76,7 @@ Dashboard Kullanıcısı                           │  • Aggregator    │
 
 ---
 
-## tracker.js — Sıfır Performans Etkisi
+## ⚡ tracker.js — Sıfır Performans Etkisi
 
 Projenin temel prensibi: izleme kodu ziyaretçinin deneyimini **hiçbir şekilde** yavaşlatmamalı.
 
@@ -92,10 +94,10 @@ Projenin temel prensibi: izleme kodu ziyaretçinin deneyimini **hiçbir şekilde
 
 ---
 
-## Başlangıç — Production (Docker)
+## 🚀 Başlangıç — Production (Docker)
 
 ### Ön koşul
-Docker yüklü bir sunucu. Başka hiçbir şey gerekmez.
+Docker yüklü bir sunucu gerektirir. Başka hiçbir şey gerekmez.
 
 ---
 
@@ -110,7 +112,7 @@ cd trackerforsite
 cp .env.example .env
 ```
 
-`.env` dosyasını aç. **Değiştirmen gereken 3 yer var:**
+`.env` dosyasını aç. **Değiştirilmesi gereken 3 yer var:**
 
 | Değişken | Ne yazacaksın |
 |---|---|
@@ -173,7 +175,7 @@ Dashboard'da oluşan embed kodunu izlemek istediğin web sitesinin `<head>` böl
 
 ---
 
-## Geliştirme Ortamı
+## 🛠️ Geliştirme Ortamı
 
 ### Ön koşullar
 
@@ -229,7 +231,7 @@ Sayfayı aç → `POST http://localhost:5000/api/collect` isteğini tarayıcı D
 
 ---
 
-## Konfigürasyon Referansı
+## ⚙️ Konfigürasyon Referansı
 
 ### `.env` (Docker Compose)
 
@@ -253,7 +255,7 @@ Docker'da çalışırken tüm değerler `.env` üzerinden otomatik olarak overri
 
 ---
 
-## Proje Yapısı
+## 📁 Proje Yapısı
 
 ```
 TrackerForSites/
@@ -308,7 +310,7 @@ TrackerForSites/
 
 ---
 
-## Güvenlik
+## 🔒 Güvenlik
 
 ### IP Gizliliği
 Ham IP adresi veritabanına **asla** yazılmaz. Fingerprint hesaplandıktan hemen sonra bellekten silinir; yalnızca `SHA256(ip + user-agent + ...)` hash'i saklanır — bu değer geri döndürülemez.
@@ -336,6 +338,6 @@ Ham IP adresi veritabanına **asla** yazılmaz. Fingerprint hesaplandıktan heme
 
 ---
 
-## Lisans
+## 📄 Lisans
 
 MIT
