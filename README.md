@@ -1,4 +1,15 @@
-# TrackerForSites
+# ⚡ TrackerForSites
+
+<p align="left">
+  <img src="https://img.shields.io/badge/C%23-239120?style=for-the-badge&logo=csharp&logoColor=white" alt="C#" />
+  <img src="https://img.shields.io/badge/.NET_8-512BD4?style=for-the-badge&logo=dotnet&logoColor=white" alt=".NET 8" />
+  <img src="https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black" alt="JavaScript" />
+  <img src="https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React" />
+  <img src="https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white" alt="Vite" />
+  <img src="https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL" />
+  <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
+  <img src="https://img.shields.io/badge/Nginx-009639?style=for-the-badge&logo=nginx&logoColor=white" alt="Nginx" />
+</p>
 
 Gizlilik odaklı, cookie'siz, kendi sunucunda barındırılan web analitik platformu.  
 Üçüncü taraf servise bağımlılık yok. Ziyaretçi verisi tamamen sende kalır.
@@ -28,7 +39,7 @@ Veritabanı, API ve arayüz tek bir komutla birlikte ayağa kalkar.
 
 ## ✨ Özellikler
 
-<img width="1919" height="992" alt="Ekran görüntüsü 2026-07-25 123406" src="https://github.com/user-attachments/assets/f2383335-1c1f-4c24-8f4e-7e7a66999f59" />
+<!-- EKRAN GÖRÜNTÜSÜ BURAYA: ![Dashboard](DOSYA_ADI.png) -->
 
 | Özellik | Açıklama |
 |---|---|
