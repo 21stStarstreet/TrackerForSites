@@ -365,9 +365,3 @@ Ham IP adresi veritabanına **asla** yazılmaz. Fingerprint hesaplandıktan heme
 - [ ] `db/seed.sql` production'da çalıştırılmadı mı?
 - [ ] HTTPS aktif mi? (Reverse proxy veya Nginx SSL)
 - [ ] Sunucudaki 5000 portu dışarıya kapalı mı? (Yalnızca 80/443 açık olmalı)
-
----
-
-## 📄 Lisans
-
-MIT
