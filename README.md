@@ -11,8 +11,9 @@
   <img src="https://img.shields.io/badge/Nginx-009639?style=for-the-badge&logo=nginx&logoColor=white" alt="Nginx" />
 </p>
 
-Gizlilik odaklı, cookie'siz, kendi sunucunda barındırılan web analitik platformu.  
-Üçüncü taraf servise bağımlılık yok. Ziyaretçi verisi tamamen sende kalır.
+**TrackerForSites**, Google Analytics gibi platformlara karşı geliştirilmiş hafif ve modern bir alternatiftir. 
+
+**Projenin Amacı:** Web sitelerinin hızını düşürmeden (<1 KB script), **çerez (cookie) kullanmadan** ve ziyaretçilerin **gizliliğini ihlal etmeden** en önemli istatistikleri (anlık ziyaretçi, sayfa görüntülenmesi, cihaz/tarayıcı dağılımı vb.) doğrudan site sahibine sunmaktır. Verileriniz tamamen kendi sunucunuzda (self-hosted) kalır, asla üçüncü taraflara satılmaz veya paylaşılmaz.
 
 ---
 
@@ -357,9 +358,3 @@ Ham IP adresi veritabanına **asla** yazılmaz. Fingerprint hesaplandıktan heme
 - [ ] `db/seed.sql` production'da çalıştırılmadı mı?
 - [ ] HTTPS aktif mi? (Reverse proxy veya Nginx SSL)
 - [ ] Sunucudaki 5000 portu dışarıya kapalı mı? (Yalnızca 80/443 açık olmalı)
-
----
-
-## 📄 Lisans
-
-MIT
