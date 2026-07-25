@@ -1,52 +1,51 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using System.Text.Json;
+using System.Threading.RateLimiting;
 using TrackerForSites.Api.Data;
 using TrackerForSites.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // ── Veritabanı ──────────────────────────────────────────────────────
-// Npgsql: PostgreSQL için EF Core provider.
-// Connection string appsettings.json'dan okunur.
 builder.Services.AddDbContext<AppDbContext>(opt =>
     opt.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // ── Servisler (Dependency Injection) ────────────────────────────────
-// Singleton: uygulama boyunca tek instance. Stateless servisler için.
-// Scoped:    her HTTP isteği için yeni instance. DB context gibi.
-// Transient: her inject için yeni instance. Hafif, stateless.
+builder.Services.AddSingleton<FingerprintService>();
+builder.Services.AddSingleton<UserAgentService>();
+builder.Services.AddSingleton<GeoIpService>();
+builder.Services.AddScoped<JwtService>();
 
-builder.Services.AddSingleton<FingerprintService>();  // Stateless, SHA256 hesaplar
-builder.Services.AddSingleton<UserAgentService>();    // Parser bir kez oluşturulur
-builder.Services.AddSingleton<GeoIpService>();        // Cache tutuyor, singleton olmalı
-builder.Services.AddScoped<JwtService>();             // Config okur, scoped yeterli
-builder.Services.AddHostedService<StatsAggregatorService>(); // Gece çalışan istatistik toplayıcı
+// Gece 00:05 UTC'de çalışan istatistik toplayıcı
+builder.Services.AddHostedService<StatsAggregatorService>();
+
+// ── Event Kuyruğu ────────────────────────────────────────────────────
+// EventQueueService hem IEventQueue (inject için) hem BackgroundService (arka plan) olarak çalışır.
+// AddSingleton ile tek instance oluşturur, AddHostedService aynı instance'ı kullanır.
+builder.Services.AddSingleton<EventQueueService>();
+builder.Services.AddSingleton<IEventQueue>(sp => sp.GetRequiredService<EventQueueService>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<EventQueueService>());
 
 // GeoIP için HttpClient
 builder.Services.AddHttpClient("geoip", c =>
 {
     c.BaseAddress = new Uri("http://ip-api.com");
-    c.Timeout     = TimeSpan.FromSeconds(3); // Hızlı timeout
+    c.Timeout     = TimeSpan.FromSeconds(3);
 });
 
 // ── JWT Kimlik Doğrulama ─────────────────────────────────────────────
-// JWT (JSON Web Token): stateless authentication mekanizması.
-// Kullanıcı login olur, imzalı token alır, her istekte gönderir.
-// Sunucu token'ı verifiye eder, DB'ye bakmaz.
 var jwtKey = builder.Configuration["Jwt:Key"]
     ?? throw new InvalidOperationException("Jwt:Key yapılandırması eksik!");
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(opt =>
     {
-        // ÖNEMLI: MapInboundClaims = false
-        // Varsayılan olarak ASP.NET Core, JWT claim adlarını
-        // uzun WS-Federation URI'larına dönüştürür:
-        //   "sub" → "http://schemas.xmlsoap.org/.../nameidentifier"
-        // Bu durumda User.FindFirstValue("sub") → null döner!
-        // false yapınca claim adları JWT'deki gibi kalır: "sub", "email" vb.
+        // MapInboundClaims = false: claim adları JWT'deki gibi kalır ("sub", "email" vb.)
+        // Aksi hâlde ASP.NET Core uzun URI'lara dönüştürür ve User.FindFirstValue("sub") null döner.
         opt.MapInboundClaims = false;
 
         opt.TokenValidationParameters = new TokenValidationParameters
@@ -60,54 +59,109 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateLifetime         = true,
             ClockSkew                = TimeSpan.FromMinutes(1)
         };
+
+        // SSE desteği: EventSource tarayıcı API'si Authorization başlığı gönderemez.
+        // Çözüm: JWT token'ı ?token= query parametresinden oku.
+        // Bu yalnızca /realtime/stream endpoint'i için gerekli.
+        opt.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var token = context.Request.Query["token"];
+                if (!string.IsNullOrEmpty(token))
+                    context.Token = token;
+                return Task.CompletedTask;
+            }
+        };
     });
 
 builder.Services.AddAuthorization();
 
+// ── Rate Limiting ────────────────────────────────────────────────────
+// .NET 8 yerleşik rate limiter — ek paket gerekmez.
+// Her politika IP başına uygulanır (partition key = RemoteIpAddress).
+builder.Services.AddRateLimiter(opt =>
+{
+    opt.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    // 429 yanıtı JSON formatında döndür
+    opt.OnRejected = async (context, ct) =>
+    {
+        context.HttpContext.Response.ContentType = "application/json";
+        await context.HttpContext.Response.WriteAsync(
+            JsonSerializer.Serialize(new { message = "Çok fazla istek. Lütfen birkaç saniye bekleyin." }),
+            ct);
+    };
+
+    // Collect politikası: 60 istek / dakika / IP (kayar pencere)
+    // tracker.js sayfa geçişlerinde çağırır — normal kullanımda max ~20/dk.
+    opt.AddPolicy("collect", context =>
+        RateLimitPartition.GetSlidingWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new SlidingWindowRateLimiterOptions
+            {
+                Window           = TimeSpan.FromMinutes(1),
+                SegmentsPerWindow = 6,  // 10'ar saniyelik dilimler
+                PermitLimit      = 60,
+                QueueLimit       = 0    // Sıra bekleme yok — hemen 429 dön
+            }));
+
+    // Auth politikası: 10 istek / dakika / IP (sabit pencere)
+    // Brute-force şifre denemelerini engeller.
+    opt.AddPolicy("auth", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                Window      = TimeSpan.FromMinutes(1),
+                PermitLimit = 10,
+                QueueLimit  = 0
+            }));
+});
+
 // ── CORS ──────────────────────────────────────────────────────────────
-// tracker.js farklı bir domain'den istek atar.
-// CORS: tarayıcının cross-origin isteklerine izin veriyoruz.
 builder.Services.AddCors(opt =>
 {
+    // tracker.js herhangi bir siteden çağırabilmeli
     opt.AddPolicy("TrackerPolicy", policy =>
-    {
-        policy
-            .AllowAnyOrigin()   // Herhangi bir site tracker'ı embed edebilir
-            .AllowAnyMethod()
-            .AllowAnyHeader();
-    });
+        policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
 
+    // Dashboard için kısıtlı CORS — yalnızca kayıtlı origin'ler
     opt.AddPolicy("DashboardPolicy", policy =>
     {
-        // Dashboard için daha kısıtlı CORS
         var allowed = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
                       ?? ["http://localhost:3000"];
-        policy
-            .WithOrigins(allowed)
-            .AllowAnyMethod()
-            .AllowAnyHeader()
-            .AllowCredentials();
+        policy.WithOrigins(allowed)
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .AllowCredentials();
     });
 });
 
 builder.Services.AddControllers();
-builder.Services.AddHealthChecks(); // /health endpoint için
+builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
 // ── Middleware Pipeline ───────────────────────────────────────────────
-// Sıralama önemli! Her middleware bir sonrakini çağırır.
+// Sıralama önemlidir. Her middleware bir sonrakini çağırır.
 
-if (app.Environment.IsDevelopment())
-    app.UseDeveloperExceptionPage();
+// Global hata yakalayıcı — en başta olmalı (diğer middleware hatalarını da yakalar)
+app.UseExceptionHandler(errorApp =>
+    errorApp.Run(async context =>
+    {
+        context.Response.StatusCode  = 500;
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsync(
+            JsonSerializer.Serialize(new { message = "Beklenmeyen bir hata oluştu." }));
+    }));
 
-// CORS: global olarak TrackerPolicy uygula (/api/collect için)
-// Dashboard endpoint'leri kendi [EnableCors] attribute'larıyla
-// DashboardPolicy kullanacak.
 app.UseCors("TrackerPolicy");
 app.UseAuthentication();
 app.UseAuthorization();
-app.MapHealthChecks("/health"); // docker-compose healthcheck'i bunu kullanır
+app.UseRateLimiter();
+
+app.MapHealthChecks("/health");
 app.MapControllers();
 
 app.Run();

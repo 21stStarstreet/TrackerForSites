@@ -46,8 +46,8 @@ export default function Login() {
       <div className="login-card card-glass animate-in">
         {/* Logo */}
         <div className="login-logo">
-          <div className="logo-icon">
-            <Zap size={22} />
+          <div className="logo-icon" style={{ padding: 0, overflow: 'hidden', background: 'transparent' }}>
+            <img src="/logo.jpg" alt="TrackerFS Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
           <div>
             <h1 className="login-title">TrackerFS</h1>

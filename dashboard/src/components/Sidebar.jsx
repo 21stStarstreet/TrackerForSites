@@ -41,10 +41,9 @@ export default function Sidebar({ sites = [], activeSite, onSiteChange }) {
 
   return (
     <aside className="sidebar">
-      {/* Logo */}
       <div className="sidebar-logo">
-        <div className="logo-icon">
-          <Zap size={18} />
+        <div className="logo-icon" style={{ padding: 0, overflow: 'hidden', background: 'transparent' }}>
+          <img src="/logo.jpg" alt="TrackerFS Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         </div>
         <span className="logo-text">TrackerFS</span>
       </div>

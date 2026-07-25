@@ -6,7 +6,8 @@
 const BASE = import.meta.env.VITE_API_URL || '';
 
 // Token'ları localStorage'da tut
-const getAccess  = () => localStorage.getItem('access_token');
+export const getAccessToken = () => localStorage.getItem('access_token');
+const getAccess  = getAccessToken;
 const getRefresh = () => localStorage.getItem('refresh_token');
 const setTokens  = (access, refresh) => {
   localStorage.setItem('access_token', access);

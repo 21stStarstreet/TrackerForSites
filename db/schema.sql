@@ -99,8 +99,9 @@ CREATE TABLE IF NOT EXISTS sites (
     name        TEXT NOT NULL,
 
     -- Domain
-    -- sadece bir kez kaydedilebilir
-    domain      TEXT NOT NULL UNIQUE,
+    -- Aktif siteler arasında unique. Silinmiş (is_active=false) siteler kısıta dahil değil.
+    -- Partial unique index: schema.sql altında tanımlanıyor.
+    domain      TEXT NOT NULL,
 
     -- API key: tracker.js'in data-site-id değeri bu olacak.
     -- gen_random_uuid() ile üretilir, hash'e gerek yok.
@@ -286,9 +287,15 @@ CREATE TABLE IF NOT EXISTS daily_stats (
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- (site_id, stat_date) çifti unique olmalı -> bir günde bir özet.
+-- (site_id, stat_date) çifti unique olmalı → bir günde bir özet.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_stats_site_date
     ON daily_stats (site_id, stat_date);
+
+-- Aktif siteler arasında domain unique olmalı.
+-- Partial index: WHERE is_active = true → silinmiş siteler kısıta dahil değil.
+-- Bu sayede silinen bir site aynı domain ile yeniden eklenebilir.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sites_domain_active
+    ON sites (domain) WHERE is_active = true;
 
 
 -- ─────────────────────────────────────────────────────────────────

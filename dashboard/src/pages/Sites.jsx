@@ -59,16 +59,19 @@ export default function Sites({ onSiteChange }) {
   };
 
   const copyEmbed = (site) => {
-    // VITE_TRACKER_URL .env'de ayarlanmazsa "yourdomain.com" placeholder kullanılır
-    const trackerUrl = import.meta.env.VITE_TRACKER_URL || 'https://yourdomain.com/tracker.js';
+    // tracker.js her zaman aynı sunucudan servis edilir (Nginx static file)
+    // window.location.origin: dev'de localhost, prod'da gerçek domain
+    const trackerUrl = `${window.location.origin}/tracker.js`;
     const code = `<script async defer src="${trackerUrl}" data-site-id="${site.apiKey}"><\/script>`;
     navigator.clipboard.writeText(code);
     setCopied(site.id);
     setTimeout(() => setCopied(null), 2000);
   };
 
-  const embedCode = (apiKey) =>
-    `<script async defer\n  src="https://yourdomain.com/tracker.js"\n  data-site-id="${apiKey}">\n<\/script>`;
+  const embedCode = (apiKey) => {
+    const trackerUrl = `${window.location.origin}/tracker.js`;
+    return `<script async defer\n  src="${trackerUrl}"\n  data-site-id="${apiKey}">\n<\/script>`;
+  };
 
   return (
     <div className="sites-page animate-in">

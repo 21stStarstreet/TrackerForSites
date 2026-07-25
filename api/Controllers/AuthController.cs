@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using TrackerForSites.Api.Data;
 using TrackerForSites.Api.Models.Dtos;
@@ -23,6 +24,7 @@ namespace TrackerForSites.Api.Controllers;
 [ApiController]
 [Route("api/auth")]
 [Microsoft.AspNetCore.Cors.EnableCors("DashboardPolicy")]
+[EnableRateLimiting("auth")] // Brute-force koruması: 10 istek/dakika/IP
 public class AuthController : ControllerBase
 {
     private readonly AppDbContext _db;
@@ -49,6 +51,8 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest req)
     {
+        try
+        {
         // 1. Kullanıcıyı bul
         var user = await _db.Users
             .Where(u => u.Email == req.Email && u.IsActive)
@@ -96,6 +100,13 @@ public class AuthController : ControllerBase
             FullName:     user.FullName ?? user.Email,
             Email:        user.Email
         ));
+        }
+        catch (Exception ex)
+        {
+            var logger = HttpContext.RequestServices.GetRequiredService<ILogger<AuthController>>();
+            logger.LogError(ex, "Login endpoint hatası.");
+            return StatusCode(500, new { message = "Giriş işlemi sırasında bir hata oluştu." });
+        }
     }
 
     /// <summary>
@@ -105,6 +116,8 @@ public class AuthController : ControllerBase
     [HttpPost("refresh")]
     public async Task<IActionResult> Refresh([FromBody] RefreshRequest req)
     {
+        try
+        {
         // 1. Gelen refresh token'ı hash'le ve DB'de ara
         var hashBytes = System.Security.Cryptography.SHA256.HashData(
             System.Text.Encoding.UTF8.GetBytes(req.RefreshToken));
@@ -149,6 +162,13 @@ public class AuthController : ControllerBase
             FullName:     storedToken.User.FullName ?? storedToken.User.Email,
             Email:        storedToken.User.Email
         ));
+        }
+        catch (Exception ex)
+        {
+            var logger = HttpContext.RequestServices.GetRequiredService<ILogger<AuthController>>();
+            logger.LogError(ex, "Refresh endpoint hatası.");
+            return StatusCode(500, new { message = "Token yenileme sırasında bir hata oluştu." });
+        }
     }
 
     /// <summary>

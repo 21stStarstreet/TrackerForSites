@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Users, Eye, TrendingUp, Activity, RefreshCw } from 'lucide-react';
-import { api } from '../api/client';
+import { api, getAccessToken } from '../api/client';
 import StatCard from '../components/StatCard';
 import TrafficChart from '../components/TrafficChart';
 import DeviceChart from '../components/DeviceChart';
@@ -29,16 +29,53 @@ export default function Dashboard({ site }) {
     }
   }, [site?.id, days]);
 
-  // Gerçek zamanlı sayac — her 30 saniyede bir güncellenir
+  // Gerçek zamanlı sayaç — SSE (Server-Sent Events) ile server push
+  // Token süresi dolduğunda (15 dk) yeni token ile yeniden bağlanır.
   useEffect(() => {
     if (!site?.id) return;
-    const tick = async () => {
-      const rt = await api.getRealtime(site.id);
-      setRealtime(rt.active_visitors ?? 0);
+    let closed = false;
+    let es = null;
+    let errorCount = 0;
+    let reconnectTimeout = null;
+
+    const connect = () => {
+      if (closed) return;
+      const token = getAccessToken();
+      if (!token) return;
+
+      const BASE = import.meta.env.VITE_API_URL || '';
+      es = new EventSource(`${BASE}/api/stats/${site.id}/realtime/stream?token=${encodeURIComponent(token)}`);
+
+      es.onmessage = (e) => {
+        errorCount = 0; // Bağlantı sağlıklı, sayacı sıfırla
+        setRealtime(parseInt(e.data, 10) || 0);
+      };
+
+      es.onerror = async () => {
+        errorCount++;
+        if (errorCount >= 3) {
+          // 3 art arda hata → token süresi dolmuş olabilir
+          es.close();
+          try {
+            // getRealtime çağrısı: client.js'deki 401 handler yeni token üretir
+            await api.getRealtime(site.id);
+          } catch (_) { /* refresh başarısız, yine de tekrar dene */ }
+
+          if (!closed) {
+            errorCount = 0;
+            reconnectTimeout = setTimeout(connect, 3_000); // 3 sn bekle, yeniden bağlan
+          }
+        }
+      };
     };
-    tick();
-    const interval = setInterval(tick, 30_000);
-    return () => clearInterval(interval);
+
+    connect();
+
+    return () => {
+      closed = true;
+      clearTimeout(reconnectTimeout);
+      es?.close();
+    };
   }, [site?.id]);
 
   useEffect(() => { load(); }, [load]);

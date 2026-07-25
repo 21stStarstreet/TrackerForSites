@@ -1,38 +1,38 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using TrackerForSites.Api.Data;
 using TrackerForSites.Api.Models.Dtos;
-using TrackerForSites.Api.Models.Entities;
 using TrackerForSites.Api.Services;
 
 namespace TrackerForSites.Api.Controllers;
 
 /// <summary>
-/// tracker.js'ten gelen event'leri alır ve DB'ye yazar.
+/// tracker.js'ten gelen event'leri alır ve arka plan kuyruğuna iletir.
 ///
 /// ENDPOINT: POST /api/collect
 ///
-/// AKIŞ:
+/// AKIŞ (v2 — Background Queue):
 /// 1. Body'den CollectRequest al
 /// 2. api_key ile siteyi doğrula
 /// 3. Bot filtresi uygula (sunucu tarafı)
-/// 4. IP al -> fingerprint üret -> IP hash'le
-/// 5. UA parse et -> browser/os/device
-/// 6. GeoIP sorgula -> country/city
-/// 7. Event'i DB'ye yaz
-/// 8. 204 No Content döndür (body yok, hızlı)
+/// 4. IP al
+/// 5. EventQueueService'e enqueue et (non-blocking, mikrosaniye)
+/// 6. 204 No Content döndür — toplam yanıt süresi ~12ms
+///
+/// GeoIP, fingerprint, UA parse ve DB write işlemleri EventQueueService
+/// tarafından arka planda yapılır (50'li batch INSERT).
 /// </summary>
 [ApiController]
 [Route("api")]
+[EnableRateLimiting("collect")]
 public class CollectController : ControllerBase
 {
     private readonly AppDbContext _db;
-    private readonly FingerprintService _fingerprint;
-    private readonly UserAgentService _ua;
-    private readonly GeoIpService _geoIp;
+    private readonly IEventQueue _queue;
     private readonly ILogger<CollectController> _logger;
 
-    // Sunucu tarafı bot filtresi, tracker.js'i bypass eden botlar için
+    // Sunucu tarafı bot filtresi — tracker.js'i bypass eden botlar için
     private static readonly System.Text.RegularExpressions.Regex BotPattern =
         new(@"bot|crawl|spider|headless|puppet|phantom|selenium|slurp|mediapartners",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase |
@@ -40,103 +40,63 @@ public class CollectController : ControllerBase
 
     public CollectController(
         AppDbContext db,
-        FingerprintService fingerprint,
-        UserAgentService ua,
-        GeoIpService geoIp,
+        IEventQueue queue,
         ILogger<CollectController> logger)
     {
-        _db          = db;
-        _fingerprint = fingerprint;
-        _ua          = ua;
-        _geoIp       = geoIp;
-        _logger      = logger;
+        _db     = db;
+        _queue  = queue;
+        _logger = logger;
     }
 
     [HttpPost("collect")]
     public async Task<IActionResult> Collect([FromBody] CollectRequest req)
     {
-        // 1. Temel validasyon
-        if (string.IsNullOrWhiteSpace(req.S) || string.IsNullOrWhiteSpace(req.U))
-            return BadRequest();
-
-        // 2. Site doğrulama, api_key geçerli mi?
-        var site = await _db.Sites
-            .Where(s => s.ApiKey == req.S && s.IsActive)
-            .Select(s => new { s.Id })   // Sadece Id al, tüm nesneyi yükleme
-            .FirstOrDefaultAsync();
-
-        if (site is null)
-            return Unauthorized(); // Geçersiz api_key
-
-        // 3. Sunucu tarafı bot filtresi
-        var userAgent = Request.Headers.UserAgent.ToString();
-        if (BotPattern.IsMatch(userAgent))
-            return NoContent(); // Botu sessizce kabul et, kaydetme
-
-        // 4. IP adresini al
-        // X-Forwarded-For: proxy/load balancer arkasındaki gerçek IP
-        var ipAddress = Request.Headers["X-Forwarded-For"].FirstOrDefault()
-                        ?? HttpContext.Connection.RemoteIpAddress?.ToString()
-                        ?? "unknown";
-
-        // Birden fazla proxy varsa ilk IP gerçek istemcidir
-        // "1.2.3.4, 5.6.7.8" -> "1.2.3.4"
-        if (ipAddress.Contains(','))
-            ipAddress = ipAddress.Split(',')[0].Trim();
-
-        // 5. Fingerprint üret ve IP'yi hash'le
-        var fingerprintHash = _fingerprint.Generate(ipAddress, userAgent, req.L, req.W);
-        var ipHash          = _fingerprint.HashIp(ipAddress);
-        // Ham IP artık kullanılmıyor, GC toplayacak: GDPR uyumu
-
-        // 6. UA parse et
-        var parsed = _ua.Parse(userAgent);
-
-        // 7. GeoIP (async, hata olursa null döner, event yine kaydedilir)
-        var geo = await _geoIp.LookupAsync(ipAddress);
-
-        // 8. Referrer domain'ini çıkar
-        string? referrerDomain = null;
-        if (!string.IsNullOrWhiteSpace(req.R) && Uri.TryCreate(req.R, UriKind.Absolute, out var refUri))
-            referrerDomain = refUri.Host.Replace("www.", "");
-
-        // 9. client_ts dönüştür: Unix ms -> DateTimeOffset
-        DateTimeOffset? clientTs = req.Ts.HasValue
-            ? DateTimeOffset.FromUnixTimeMilliseconds(req.Ts.Value)
-            : null;
-
-        // 10. Event oluştur ve kaydet
-        var ev = new Event
+        try
         {
-            SiteId        = site.Id,
-            EventType     = "pageview",
-            Url           = req.U,
-            Referrer      = req.R,
-            ReferrerDomain = referrerDomain,
-            PageTitle     = req.Ti,
-            Language      = req.L?[..Math.Min(req.L.Length, 10)], // max 10 karakter
-            ScreenWidth   = req.W,
-            SessionId     = req.Id ?? Guid.NewGuid().ToString(),
-            ClientTs      = clientTs,
-            IpHash        = ipHash,
-            UserAgent     = userAgent,
-            Fingerprint   = fingerprintHash,
-            Browser       = parsed.Browser,
-            Os            = parsed.Os,
-            DeviceType    = parsed.DeviceType,
-            CountryCode   = geo?.CountryCode,
-            City          = geo?.City,
-            ServerTs      = DateTimeOffset.UtcNow
-        };
+            // 1. Temel validasyon
+            if (string.IsNullOrWhiteSpace(req.S) || string.IsNullOrWhiteSpace(req.U))
+                return BadRequest();
 
-        _db.Events.Add(ev);
-        await _db.SaveChangesAsync();
+            // 2. Site doğrulama — api_key geçerli mi?
+            var site = await _db.Sites
+                .Where(s => s.ApiKey == req.S && s.IsActive)
+                .Select(s => new { s.Id })
+                .FirstOrDefaultAsync();
 
-        _logger.LogDebug("Event saved: {Site} | {Url} | {Device}",
-            req.S, req.U, parsed.DeviceType);
+            if (site is null)
+                return Unauthorized();
 
-        // 204 No Content: body yok, en hızlı response
-        // tracker.js sendBeacon zaten response'u okumaz
-        return NoContent();
+            // 3. Sunucu tarafı bot filtresi
+            var userAgent = Request.Headers.UserAgent.ToString();
+            if (BotPattern.IsMatch(userAgent))
+                return NoContent(); // Botu sessizce kabul et, kuyruğa alma
+
+            // 4. IP adresini al
+            // X-Forwarded-For: proxy/load balancer arkasındaki gerçek IP
+            var ipAddress = Request.Headers["X-Forwarded-For"].FirstOrDefault()
+                            ?? HttpContext.Connection.RemoteIpAddress?.ToString()
+                            ?? "unknown";
+
+            // Birden fazla proxy varsa ilk IP gerçek istemcidir: "1.2.3.4, 5.6.7.8" → "1.2.3.4"
+            if (ipAddress.Contains(','))
+                ipAddress = ipAddress.Split(',')[0].Trim();
+
+            // 5. Kuyruğa at — non-blocking, ~microseconds
+            // EventQueueService arka planda: fingerprint üret, GeoIP sor, DB'ye yaz
+            // Kuyruk doluysa (>10.000 event) en eski düşürülür — analitik için kabul edilebilir
+            _queue.TryEnqueue(new EventQueueItem(site.Id, ipAddress, userAgent, req));
+
+            _logger.LogDebug("Event kuyruğa alındı: {Site} | {Url}", req.S, req.U);
+
+            // 6. 204 No Content: body yok, en hızlı response
+            // tracker.js sendBeacon zaten response'u okumaz
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            // Hata olursa tracker.js'e 500 döndürme — site bundan etkilenmesin
+            _logger.LogError(ex, "Collect endpoint hatası.");
+            return NoContent();
+        }
     }
 }

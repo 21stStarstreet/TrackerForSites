@@ -35,72 +35,106 @@ public class SitesController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
-        var sites = await _db.Sites
-            .Where(s => s.UserId == CurrentUserId && s.IsActive)
-            .OrderByDescending(s => s.CreatedAt)
-            .Select(s => new
-            {
-                s.Id,
-                s.Name,
-                s.Domain,
-                s.ApiKey,
-                s.CreatedAt
-            })
-            .ToListAsync();
-
-        return Ok(sites);
+        try
+        {
+            var sites = await _db.Sites
+                .Where(s => s.UserId == CurrentUserId && s.IsActive)
+                .OrderByDescending(s => s.CreatedAt)
+                .Select(s => new { s.Id, s.Name, s.Domain, s.ApiKey, s.CreatedAt })
+                .ToListAsync();
+            return Ok(sites);
+        }
+        catch (Exception ex)
+        {
+            var logger = HttpContext.RequestServices.GetRequiredService<ILogger<SitesController>>();
+            logger.LogError(ex, "GetAll hatası.");
+            return StatusCode(500, new { message = "Siteler yüklenirken bir hata oluştu." });
+        }
     }
 
-    /// <summary>Yeni site ekle.</summary>
+    /// <summary>Yeni site ekle. Domain daha önce silinmişse reaktive et.</summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateSiteRequest req)
     {
-        if (string.IsNullOrWhiteSpace(req.Name) || string.IsNullOrWhiteSpace(req.Domain))
-            return BadRequest(new { message = "Site adı ve domain zorunludur." });
-
-        // Aynı domain başka kullanıcıda var mı?
-        var exists = await _db.Sites.AnyAsync(s => s.Domain == req.Domain);
-        if (exists)
-            return Conflict(new { message = "Bu domain zaten kayıtlı." });
-
-        var site = new Site
+        try
         {
-            UserId = CurrentUserId,
-            Name   = req.Name.Trim(),
-            Domain = req.Domain.Trim().ToLowerInvariant(),
-        };
+            if (string.IsNullOrWhiteSpace(req.Name) || string.IsNullOrWhiteSpace(req.Domain))
+                return BadRequest(new { message = "Site adı ve domain zorunludur." });
 
-        _db.Sites.Add(site);
-        await _db.SaveChangesAsync();
+            var domain = req.Domain.Trim().ToLowerInvariant();
 
-        // Embed kodu ile birlikte döndür
-        return CreatedAtAction(nameof(GetAll), new
+            // 1. Bu kullanıcıda aktif olarak kayıtlı aynı domain var mı?
+            var activeSite = await _db.Sites.FirstOrDefaultAsync(s =>
+                s.Domain == domain && s.IsActive && s.UserId == CurrentUserId);
+            if (activeSite is not null)
+                return Conflict(new { message = "Bu domain zaten kayıtlı." });
+
+            // 2. Daha önce silinmiş (soft delete) aynı domain var mı?
+            // Varsa yeniden oluşturmak yerine reaktive et.
+            // API key korunur → eski embed script çalışmaya devam eder.
+            var deletedSite = await _db.Sites.FirstOrDefaultAsync(s =>
+                s.Domain == domain && !s.IsActive && s.UserId == CurrentUserId);
+
+            Site site;
+            if (deletedSite is not null)
+            {
+                deletedSite.IsActive = true;
+                deletedSite.Name     = req.Name.Trim();
+                site = deletedSite;
+            }
+            else
+            {
+                site = new Site
+                {
+                    UserId = CurrentUserId,
+                    Name   = req.Name.Trim(),
+                    Domain = domain,
+                };
+                _db.Sites.Add(site);
+            }
+
+            await _db.SaveChangesAsync();
+
+            return CreatedAtAction(nameof(GetAll), new
+            {
+                site.Id,
+                site.Name,
+                site.Domain,
+                site.ApiKey,
+            });
+        }
+        catch (Exception ex)
         {
-            site.Id,
-            site.Name,
-            site.Domain,
-            site.ApiKey,
-            EmbedCode = $"""<script async defer src="https://yourdomain.com/tracker.js" data-site-id="{site.ApiKey}"></script>"""
-        });
+            var logger = HttpContext.RequestServices.GetRequiredService<ILogger<SitesController>>();
+            logger.LogError(ex, "Site oluşturma hatası.");
+            return StatusCode(500, new { message = "Site eklenirken bir hata oluştu." });
+        }
     }
 
     /// <summary>Site sil (soft delete, veri korunur).</summary>
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {
-        var site = await _db.Sites
-            .Where(s => s.Id == id && s.UserId == CurrentUserId)
-            .FirstOrDefaultAsync();
+        try
+        {
+            var site = await _db.Sites
+                .Where(s => s.Id == id && s.UserId == CurrentUserId)
+                .FirstOrDefaultAsync();
 
-        if (site is null)
-            return NotFound();
+            if (site is null) return NotFound();
 
-        // Fiziksel silme değil, is_active=false yapıyoruz.
-        // Geçmiş event verisi korunur, sadece site pasifleşir.
-        site.IsActive = false;
-        await _db.SaveChangesAsync();
-
-        return NoContent();
+            // Fiziksel silme değil, is_active=false yapıyoruz.
+            // Geçmiş event verisi korunur, sadece site pasifleşir.
+            site.IsActive = false;
+            await _db.SaveChangesAsync();
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            var logger = HttpContext.RequestServices.GetRequiredService<ILogger<SitesController>>();
+            logger.LogError(ex, "Delete hatası: {Id}", id);
+            return StatusCode(500, new { message = "Site silinirken bir hata oluştu." });
+        }
     }
 }
 

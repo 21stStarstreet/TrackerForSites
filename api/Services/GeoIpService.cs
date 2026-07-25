@@ -54,7 +54,8 @@ public class GeoIpService
 
             var result = new GeoIpResult(response.CountryCode, response.City);
 
-            // Cache'e ekle (basit implementasyon, sınır yok)
+            // Cache'e ekle. Sınırsız büyümeyi önlemek için: 5000 girişi aşınca temizle.
+            if (_cache.Count >= 5_000) _cache.Clear();
             _cache[ipAddress] = result;
 
             return result;
