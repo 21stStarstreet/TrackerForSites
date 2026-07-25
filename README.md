@@ -28,16 +28,17 @@ Veritabanı, API ve arayüz tek bir komutla birlikte ayağa kalkar.
 
 ## 📋 İçindekiler
 
-- [Özellikler](#özellikler)
+- [Özellikler](#ozellikler)
 - [Mimari](#mimari)
-- [Başlangıç — Production (Docker)](#başlangıç--production-docker)
-- [Geliştirme Ortamı](#geliştirme-ortamı)
-- [Konfigürasyon Referansı](#konfigürasyon-referansı)
-- [Proje Yapısı](#proje-yapısı)
-- [Güvenlik](#güvenlik)
+- [Başlangıç — Production (Docker)](#baslangic)
+- [Geliştirme Ortamı](#gelistirme)
+- [Konfigürasyon Referansı](#konfigurasyon)
+- [Proje Yapısı](#proje-yapisi)
+- [Güvenlik](#guvenlik)
 
 ---
 
+<a name="ozellikler"></a>
 ## ✨ Özellikler
 
 <!-- EKRAN GÖRÜNTÜSÜ BURAYA: ![Dashboard](DOSYA_ADI.png) -->
@@ -57,6 +58,7 @@ Veritabanı, API ve arayüz tek bir komutla birlikte ayağa kalkar.
 
 ---
 
+<a name="mimari"></a>
 ## 🏗️ Mimari
 
 ```
@@ -108,6 +110,7 @@ Projenin temel prensibi: izleme kodu ziyaretçinin deneyimini **hiçbir şekilde
 
 ---
 
+<a name="baslangic"></a>
 ## 🚀 Başlangıç — Production (Docker)
 
 ### Ön koşul
@@ -188,6 +191,7 @@ Dashboard'da oluşan embed kodunu izlemek istediğin web sitesinin `<head>` böl
 
 ---
 
+<a name="gelistirme"></a>
 ## 🛠️ Geliştirme Ortamı
 
 ### Ön koşullar
@@ -250,6 +254,7 @@ Sayfayı aç → `POST http://localhost:5000/api/collect` isteğini tarayıcı D
 
 ---
 
+<a name="konfigurasyon"></a>
 ## ⚙️ Konfigürasyon Referansı
 
 ### `.env` (Docker Compose)
@@ -273,6 +278,7 @@ Docker'da çalışırken tüm değerler `.env` üzerinden otomatik olarak overri
 
 ---
 
+<a name="proje-yapisi"></a>
 ## 📁 Proje Yapısı
 
 ```
@@ -328,6 +334,7 @@ TrackerForSites/
 
 ---
 
+<a name="guvenlik"></a>
 ## 🔒 Güvenlik
 
 ### IP Gizliliği
@@ -358,3 +365,9 @@ Ham IP adresi veritabanına **asla** yazılmaz. Fingerprint hesaplandıktan heme
 - [ ] `db/seed.sql` production'da çalıştırılmadı mı?
 - [ ] HTTPS aktif mi? (Reverse proxy veya Nginx SSL)
 - [ ] Sunucudaki 5000 portu dışarıya kapalı mı? (Yalnızca 80/443 açık olmalı)
+
+---
+
+## 📄 Lisans
+
+MIT
